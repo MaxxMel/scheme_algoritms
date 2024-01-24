@@ -1,0 +1,140 @@
+(load "unit-test.scm")
+
+(define (power base exponent)
+  (if (= exponent 0)
+      1
+      (* base (power base (- exponent 1)))))
+
+(define (find_frac str)
+  (let counter ((frac_index 0))
+    (and (not (>= frac_index (string-length str)))
+        
+        (if (equal? (string-ref str frac_index) #\/)
+            frac_index
+            (counter (+ frac_index 1))))))
+;(substring fraction 0 (find_frac fraction))) - числитель
+;(substring fraction (+ (find_frac fraction) 1)) - знаменатель 
+(define (delete+ str)
+  (if (not (equal? str ""))
+      
+  (if (or (equal? (car (string->list str)) #\+) (equal? (car (string->list str)) #\-))
+      (list->string (cdr (string->list str)))
+      str)
+  ""))
+(define (delete+_fo_scan str)
+  (if (equal? (car (string->list str)) #\+)        
+      (list->string (cdr (string->list str)))
+      str))
+(define (check-frac fraction) 
+  (and (not (not (find_frac fraction)))
+      
+      (and (not (equal? (substring fraction (+ (find_frac fraction) 1)) "0"))
+          
+          (and (not (or (equal? (substring fraction 0 (find_frac fraction)) "") (equal? (substring fraction (+ (find_frac fraction) 1)) "")))
+          
+              (and (not (equal? (car (string->list (substring fraction (+ (find_frac fraction) 1)))) #\-))
+                  (and (if (find_frac fraction)
+                           (let loop1 ((i 0))
+                             (or (>= i (length (string->list (delete+ (substring fraction 0 (find_frac fraction))))))
+                                
+                                 (and (char-numeric? (list-ref (string->list (delete+ (substring fraction 0 (find_frac fraction)))) i))
+                                     (loop1 (+ i 1))
+                                          
+                                     ))))
+           
+                  
+                           (let loop2 ((j 0))
+                             (or (>= j (length (string->list (substring fraction (+ (find_frac fraction) 1)))))
+
+                                 (and (char-numeric? (list-ref (string->list (substring fraction (+ (find_frac fraction) 1))) j))
+                                     (loop2 (+ j 1))
+                     
+                                     )
+                                 ))
+                       ) )))))
+
+
+ 
+(define (scan-frac1 numerator)
+  (define (ex i)
+    (if (= i 0)
+        (- (char->integer (list-ref (string->list numerator) (- (length (string->list numerator)) 1))) 48)
+
+        (+ (* (power 10 i) (- (char->integer (list-ref (string->list numerator) (- (length (string->list numerator)) (+ i 1)))) 48)) (ex (- i 1)))
+        ))
+  (ex (- (length (string->list numerator)) 1)))
+
+(define (-fo_numerator str)
+  (and (equal? (car (string->list str)) #\-)
+      (list->string (cdr (string->list str)))
+      ))
+(define (scan-frac fraction)
+  (and (check-frac fraction)
+      
+      (if (not (-fo_numerator fraction))
+          
+          (/ (scan-frac1 (delete+_fo_scan (substring fraction 0 (find_frac fraction))))
+             (scan-frac1 (delete+_fo_scan (substring fraction (+ (find_frac fraction) 1)))))
+          (* (/ (scan-frac1 (list->string (cdr (string->list (substring fraction 0 (find_frac fraction))))))
+                (scan-frac1 (delete+_fo_scan (substring fraction (+ (find_frac fraction) 1))))) -1)
+          )))
+
+(define force-return 0)
+(define (exit) (force-return #f))
+
+(define (split-fracs str)
+  (let loop ((fracs '()) (it-frac "") (lstr (string->list str)))
+    (if (null? lstr)
+        (if (> (string-length it-frac) 0)
+            (append fracs (list it-frac))
+            fracs)
+        (if (or (equal? (car lstr) #\tab)
+                (equal? (car lstr) #\newline)
+                (equal? (car lstr) #\space))
+            (if (> (string-length it-frac) 0)
+                (loop (append fracs (list it-frac)) "" (cdr lstr))
+                (loop fracs it-frac (cdr lstr)))
+            (loop fracs (string-append it-frac (string (car lstr))) (cdr lstr))))))
+
+(define (scan-many-fracs str)
+  (call-with-current-continuation
+   (lambda (stack)
+     (set! force-return stack)
+     (let loop ((str-fracs (split-fracs str)))
+       (if (null? str-fracs)
+           '()
+           (let ((scanned-frac (scan-frac (car str-fracs))))
+             (if (not scanned-frac)
+                 (exit)
+                 (cons scanned-frac (loop (cdr str-fracs))))))))))
+
+
+(define tests
+ (list
+ (test (check-frac "=") #f)
+ (test (check-frac "1-2/3") #f)
+ (test (check-frac "1.2/3") #f)
+ (test (check-frac "1/2") #t)
+ (test (check-frac "-1/2") #t)
+ (test (check-frac "0/3") #t)
+ (test (check-frac "10/-5") #f)
+ (test (check-frac "-1.-2/3") #f)
+ (test (check-frac "-1/2.3") #f)
+ (test (check-frac "0/0") #f)
+
+ (test (scan-frac "    ") #f)
+ (test (scan-frac "1/2") 1/2)
+ (test (scan-frac "-1/2") -1/2)
+ (test (scan-frac "0/3") 0)
+ (test (scan-frac "10/-5") #f)
+ (test (scan-frac "-1.-2/3") #f)
+ (test (scan-frac "-1/2.3") #f)
+ (test (scan-frac "0/0") #f)
+ (test (scan-frac "++/--") #f)
+
+ (test (scan-many-fracs "-1/2 0/3 10/-5") #f)
+ (test (scan-many-fracs "1-2/3") #f)
+ (test (scan-many-fracs "") '())
+ (test (scan-many-fracs "    1/2    3/4    ") '(1/2 3/4))
+ (test (scan-many-fracs "1/2 3/4 5/6 abc") #f) ))
+(run-tests tests)
