@@ -1,0 +1,74 @@
+(define (my-eval x) (eval x (interaction-environment)))
+(define (mod a b) (remainder a b))
+(define (contains? lst elem) (and (not (null? lst)) (or (equal? elem (car lst)) (contains? (cdr lst) elem))))
+
+(define (find word program index)
+  (if (equal? (vector-ref program index) word)
+      index
+      (find word program (+ index 1))))
+
+(define (eq a b) (cond ((= a b) -1) (else 0)))
+
+(define (interpret program init-stack)
+  (let interpreter ((id 0) (stack init-stack) (dict '()) (ret-stack '()))
+    (if (= id (vector-length program))
+        stack
+        (let ((current (vector-ref program id)))
+          (cond
+            ((number? current) (interpreter (+ 1 id) (cons current stack) dict ret-stack))
+            ((contains? '(+ - * / mod) current) (interpreter (+ 1 id) (cons ((my-eval current) (cadr stack) (car stack)) (cddr stack)) dict ret-stack))
+            ((equal? '= current) (interpreter (+ 1 id) (cons (eq (car stack) (cadr stack)) (cddr stack)) dict ret-stack))
+            ((equal? '< current) (interpreter (+ 1 id) (cons (if (< (cadr stack) (car stack)) -1 0) (cddr stack)) dict ret-stack))
+            ((equal? '> current) (interpreter (+ 1 id) (cons (if (> (cadr stack) (car stack)) -1 0) (cddr stack)) dict ret-stack))          
+            ((equal? 'and current) (interpreter (+ 1 id) (cons (if (and (= (car stack) -1) (= (cadr stack) -1)) -1 0) (cddr stack)) dict ret-stack))
+            ((equal? current 'or) (interpreter (+ 1 id) (cons (if (or (= (car stack) -1) (= (cadr stack) -1)) -1 0) (cddr stack)) dict ret-stack))
+            ((equal? 'neg current) (interpreter (+ 1 id) (cons (* -1 (car stack)) (cdr stack)) dict ret-stack))
+            ((equal? 'not current) (interpreter (+ 1 id) (cons (cons (if (= (car stack) 0) -1 0)) (cdr stack)) dict ret-stack))
+            ((equal? 'drop current) (interpreter (+ 1 id) (cdr stack) dict ret-stack))
+            ((equal? 'swap current) (interpreter (+ 1 id) (append (list (cadr stack) (car stack)) (cddr stack)) dict ret-stack))
+            ((equal? 'dup current) (interpreter (+ 1 id) (cons (car stack) stack) dict ret-stack))
+            ((equal? 'over current) (interpreter (+ 1 id) (cons (cadr stack) stack) dict ret-stack))
+            ((equal? 'rot current) (interpreter (+ 1 id) (append (list (caddr stack) (cadr stack) (car stack)) (cdddr stack)) dict ret-stack))
+            ((equal? 'depth current) (interpreter (+ 1 id) (cons (length stack) stack) dict ret-stack))
+            ((equal? 'define current) (interpreter (+ 1 (find 'end program id)) stack (cons (list (vector-ref program (+ 1 id)) (+ 2 id)) dict) ret-stack))
+            ((equal? 'if current) (interpreter (if (= (car stack) 0) (+ 1 (find 'endif program id)) (+ 1 id)) (cdr stack) dict ret-stack))
+            ((equal? 'endif current) (interpreter (+ 1 id) stack dict ret-stack))           
+            ((contains? '(end exit) current) (interpreter (car ret-stack) stack dict (cdr ret-stack)))
+            (else (interpreter (cadr (assoc current dict)) stack dict (cons (+ id 1) ret-stack)))
+            )))))
+(interpret #(   define abs
+                  dup 0 <
+                  if neg endif
+                end
+                abs    ) ; программа
+           '(-9))        ; исходное состояние стека
+
+(interpret #(   define =0? dup 0 = end
+                define =1? dup 1 = end
+                define -- 1 - end
+                define fib
+                    =0? if drop 0 exit endif
+                    =1? if drop 1 exit endif
+                    -- dup
+                    -- fib
+                    swap fib
+                    +
+                end
+                define make-fib
+                    dup 0 < if drop exit endif
+                    dup fib
+                    swap --
+                    make-fib
+                end
+                10 make-fib     ) (quote ()))
+;⇒ (0 1 1 2 3 5 8 13 21 34 55)
+
+(interpret #(   define =0? dup 0 = end
+                define gcd
+                    =0? if drop exit endif
+                    swap over mod
+                    gcd
+                end
+                90 99 gcd
+                234 8100 gcd    ) '())
+;  ⇒ (18 9)
